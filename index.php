@@ -1,5 +1,5 @@
-<body style="background-color:green">
+<body style="background-color:yellow">
     <h1><?php
-        echo "world hello"; 
+        echo "hello world"; 
     ?></h1>
 </body>
