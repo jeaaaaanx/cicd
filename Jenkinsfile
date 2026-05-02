@@ -1,76 +1,33 @@
 pipeline {
     agent any
-
     environment {
-        GIT_REPO_URL = 'gitrepo'
-        GIT_CREDENTIALS_ID = 'github-pat'
+        GIT_REPO_URL = 'https://github.com/calvinjohnplacio/testlab.git'
+        GIT_CREDENTIALS_ID = 'github-pat2'
         GIT_BRANCH = 'main'
     }
-
     stages {
-
-        stage('Checkout SCM') {
+        stage('Checkout') {
             steps {
-                checkout scm: [
-                    $class: 'GitSCM',
-                    branches: [[name: "*/${env.GIT_BRANCH}"]],
-                    userRemoteConfigs: [[
-                        url: "${env.GIT_REPO_URL}",
-                        credentialsId: "${env.GIT_CREDENTIALS_ID}"
-                    ]]
-                ]
+                checkout([$class: 'GitSCM', branches: [[name: "*/${env.GIT_BRANCH}"]], userRemoteConfigs: [[url: "${env.GIT_REPO_URL}", credentialsId: "${env.GIT_CREDENTIALS_ID}"]]])
             }
         }
-
-        stage('Setup Python Environment') {
+        stage('Detect Change') {
             steps {
-                sh '''
-                echo "Setting up Python environment..."
-
-                python3 -m venv venv
-                . venv/bin/activate
-
-                pip install --upgrade pip
-                pip install -r requirements.txt
-                '''
+                script {
+                    def changed = sh(script: "git diff --name-only HEAD~1 HEAD | grep '.php' | head -n 1", returnStdout: true).trim()
+                    env.TARGET_PHP_FILE = changed ?: "index.php"
+                }
             }
         }
-
-        stage('Run Selenium Test') {
+        stage('Deploy') {
             steps {
                 sh '''
-                echo "Running Selenium tests..."
-
-                . venv/bin/activate
-                python test.py
-                '''
-            }
-        }
-
-        stage('Deploy to Apache') {
-            steps {
-                sh '''
-                echo "Deploying FULL PHP project to Apache..."
-
-                # Sync all files (NEW + UPDATED + DELETED)
-                sudo rsync -av -o --delete ./ /var/www/html/
-
-                # Fix ownership
+                # Only runs if test.py exited with 0
+                sudo rsync -av --delete --exclude='venv/' --exclude='.git/' --exclude='staging/' ./ /var/www/html/
                 sudo chown -R www-data:www-data /var/www/html/
                 '''
             }
         }
     }
-
-    post {
-        success {
-            echo "CI/CD SUCCESS ✔ Deployment completed"
-        }
-        failure {
-            echo "CI/CD FAILED ❌ Check logs"
-        }
-        always {
-            cleanWs()
-        }
-    }
 }
+
